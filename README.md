@@ -8,6 +8,8 @@ The primary service integrates with the `TomTom API` to fetch address suggestion
 ```bash
 $ npm install
 ```
+##### Note
+Create .env file from env.example file in root directory. add the valid tomtom api key in .env file.
 
 ## Compile and run the project
 
