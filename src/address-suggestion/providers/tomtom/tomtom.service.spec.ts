@@ -6,7 +6,7 @@ import { ConfigType } from '@nestjs/config';
 import tomtomConfig from './tomtom.config';
 import { AddressSuggestionRequestDto } from '../../dto/address-suggestion-request.dto';
 
-describe('TomTomService', () => {
+describe('TomTom Service Tests', () => {
   let service: TomTomService;
   let httpService: HttpService;
 
@@ -46,7 +46,7 @@ describe('TomTomService', () => {
     expect(service).toBeDefined();
   });
 
-  describe('suggestAddresses', () => {
+  describe('suggestAddresses method tests', () => {
     it('should return address suggestions from TomTom API', async () => {
       const mockQuery: AddressSuggestionRequestDto = {
         query: 'Sydney'
@@ -98,7 +98,8 @@ describe('TomTomService', () => {
       ]);
     });
 
-    it('should handle API errors and throw an appropriate error', async () => {
+
+    it('should handle API errors, if tomtom api failed to respond', async () => {
       const mockQuery: AddressSuggestionRequestDto = {
         query: 'Melbourne',
         limit: 5,
@@ -111,6 +112,7 @@ describe('TomTomService', () => {
       );
 
       expect(httpService.get).toHaveBeenCalled();
+      expect(httpService.get).toBeCalledTimes(1)
     });
 
     it('should include countryCode and limit in the request URL if provided', async () => {
@@ -123,13 +125,15 @@ describe('TomTomService', () => {
       const mockApiResponse = { data: { results: [] } };
       mockHttpService.get.mockReturnValue(of(mockApiResponse));
 
-      await service.suggestAddresses(mockQuery);
+      const res = await service.suggestAddresses(mockQuery);
 
       expect(httpService.get).toHaveBeenCalledWith(
         expect.stringMatching(
           /search\/2\/search\/Brisbane\.json\?key=mockApiKey&countrySet=AU&limit=10/
         )
       );
+      expect(httpService.get).toBeCalledTimes(1);
+      expect(res.length).toBe(0);
     });
 
     it('should handle an empty results array from the API gracefully', async () => {
@@ -142,7 +146,46 @@ describe('TomTomService', () => {
 
       const result = await service.suggestAddresses(mockQuery);
 
+      expect(httpService.get).toBeCalledTimes(1);
       expect(result).toEqual([]);
     });
+
+    it('should handle multiple concurrent requests', async () => {
+      const mockApiResponse = {
+        data: {
+          results: [
+            {
+              id: 'id1',
+              address: {
+                freeformAddress: '123 Test St, Sydney, Australia',
+                streetName: 'Test St',
+                country: 'Australia',
+                countryCode: 'AU',
+                municipality: 'Sydney',
+                postalCode: '2000',
+                countrySubdivisionName: 'Sydney'
+              },
+              position: {
+                lat: -33.86882,
+                lon: 151.20929,
+              },
+            },
+          ],
+        },
+      };
+      mockHttpService.get.mockReturnValue(of(mockApiResponse));
+
+      const queries = [
+        { query: 'Sydney' },
+        { query: 'Melbourne' },
+        { query: 'Brisbane' },
+      ];
+
+      await Promise.all(queries.map(q => service.suggestAddresses(q)));
+
+      expect(httpService.get).toHaveBeenCalledTimes(3);
+    });
+
+
   });
 });

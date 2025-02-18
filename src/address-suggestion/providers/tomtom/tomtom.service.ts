@@ -3,7 +3,7 @@ import { ConfigType } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { AddressSuggestionProvider } from '../../interfaces/address-suggestion-provider.interface';
 import { AddressSuggestionResult } from '../../interfaces/address-suggestion-result.interface';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, timeout } from 'rxjs';
 import { TomTomSearchResultDto, TomTomSearchResultSchema } from './dto/tomtom-search-result.dto';
 import { AddressSuggestionRequestDto } from '../../dto/address-suggestion-request.dto';
 import tomtomConfig from './tomtom.config';
@@ -22,7 +22,8 @@ export class TomTomService implements AddressSuggestionProvider {
   async suggestAddresses(query: AddressSuggestionRequestDto): Promise<AddressSuggestionResult[]> {
     try {
       const { tomtomApiKey, baseUrl } = this.config;
-      const {query: searchText, countryCode, limit} = query
+      const {query: q, countryCode, limit} = query
+      const searchText = encodeURIComponent(q);
       let url = `${baseUrl}/search/2/search/${searchText}.json?key=${tomtomApiKey}`;
 
       if (countryCode) {
@@ -32,10 +33,14 @@ export class TomTomService implements AddressSuggestionProvider {
       if (limit) {
         url += `&limit=${limit}`
       }
-      const response = await firstValueFrom(this.httpService.get(url));
+      const response = await firstValueFrom(this.httpService.get(url).pipe(timeout(3000)));
+
+      if (!response?.data?.results) {
+        throw new Error('Invalid api response structure');
+      }
 
       const TomTomSearchResultsSchema = z.array(TomTomSearchResultSchema);
-      const results = TomTomSearchResultsSchema.parse(response.data.results);
+      const results = TomTomSearchResultsSchema.parse(response?.data?.results);
 
       // can apply filter to return only australian addresses,
       // but tomtom api supports countryset in request query to filter the return response
